@@ -11,11 +11,11 @@ dev-setup:
 
 fmt:
     @ruff check . --select I --fix
-    @black -j 1 .
+    @black .
 
 lint:
     @ruff check .
-    @black --check -j 1 .
+    @black --check .
 
 test:
     @PYTHONPATH="$(PWDQ):$$PYTHONPATH" $(PY) -m pytest -q

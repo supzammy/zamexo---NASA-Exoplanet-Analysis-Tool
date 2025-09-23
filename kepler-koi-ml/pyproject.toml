@@ -1,0 +1,19 @@
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+  "venv", ".venv", "build", "dist", ".git", "__pycache__",
+  "tests",
+  "tests_archive",
+]
+
+[tool.ruff.lint]
+extend-select = ["E", "F", "I", "UP", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["utils", "scripts", "tests"]
+combine-as-imports = true
