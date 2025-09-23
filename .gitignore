@@ -242,7 +242,12 @@ lint:
     @ruff check .
     @black --check .
 
+test:
+    @PYTHONPATH=$(PWD):$$PYTHONPATH python3 -m pytest -q
 
+<<<<<<< HEAD
 
     @PYTHONPATH=$(PWD):$$PYTHONPATH python3 -m pytest -qtest:
 >>>>>>> 2b7cc5f (bootstrap: Makefile, deps, CI)
+=======
+>>>>>>> 853df7b (bootstrap: Makefile, deps, CI, smoke test)
