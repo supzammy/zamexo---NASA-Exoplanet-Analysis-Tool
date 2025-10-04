@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +206,43 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+=======
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Envs
+.venv/
+.env
+.env.*
+
+# Artifacts
+models/
+data/
+.coverage
+coverage.xml
+
+# CI configuration
+.github/workflows/ci.yml
+
+.PHONY: fmt lint test
+
+fmt:
+    @ruff check . --select I --fix
+    @black .
+
+lint:
+    @ruff check .
+    @black --check .
+
+
+
+    @PYTHONPATH=$(PWD):$$PYTHONPATH python3 -m pytest -qtest:
+>>>>>>> 2b7cc5f (bootstrap: Makefile, deps, CI)
