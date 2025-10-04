@@ -1,0 +1,51 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Investigate Git Push Issues",
+            "program": "${workspaceFolder}/${input:diagnosticScript}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Streamlit: UI",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "app/streamlit_app.py"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Train baseline",
+            "program": "${workspaceFolder}/scripts/train_baseline.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "diagnosticScript",
+            "description": "Enter a Python script (e.g. scripts/git_diagnose.py) to help investigate Git push issues"
+        }
+    ]
+}

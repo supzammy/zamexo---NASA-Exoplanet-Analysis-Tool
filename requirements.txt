@@ -1,14 +1,14 @@
-streamlit
-lightkurve
-astropy
-numpy
-pandas
-matplotlib
-scikit-learn
-joblib
-requests
-watchdog>=3.0.0
-pytest>=8.0
-pytest-cov>=5.0
-coverage>=7.6
-shap
+streamlit>=1.38
+numpy>=1.26
+pandas>=2.2
+matplotlib>=3.8
+astropy>=5.3
+astroquery>=0.4
+lightkurve>=2.5
+plotly>=5.22
+# kaleido enables static image export from Plotly; optional
+kaleido>=0.2.1
+scikit-learn>=1.4
+joblib>=1.4
+# optional
+# transitleastsquares>=1.0.31

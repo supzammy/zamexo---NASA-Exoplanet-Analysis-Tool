@@ -1,0 +1,2 @@
+target-version = "py312"
+exclude = [".venv", "build", "dist", "tests.bak", "__pycache__"]

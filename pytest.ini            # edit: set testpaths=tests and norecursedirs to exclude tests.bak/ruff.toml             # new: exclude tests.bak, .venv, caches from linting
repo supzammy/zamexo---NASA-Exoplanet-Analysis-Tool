@@ -1,0 +1,5 @@
+testpaths = tests
+norecursedirs = tests.bak
+
+[tool.ruff]
+exclude = ["tests.bak", ".venv", "caches"]
