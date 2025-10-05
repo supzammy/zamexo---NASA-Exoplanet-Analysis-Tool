@@ -155,26 +155,59 @@ st.markdown("## About ZAMEXO")
 st.markdown("""
 **ZAMEXO** leverages real NASA data and machine learning to detect and classify exoplanets from light curve observations.
 
-**👈 Select a tool from the sidebar** to explore different features:
+**Select a tool from the sidebar** to explore different features:
 
-### 🔍 Core Features
-- **🔭 Transit Detection**: Analyze light curves for periodic transit signals using Box Least Squares (BLS)
-- **🤖 AI Classification**: Machine learning classification of exoplanet candidates vs false positives  
-- **🔬 Explainable AI**: SHAP explanations to understand model predictions and build trust
-- **📤 Data Upload**: Analyze your own photometric time series data
-- **⚙️ Settings**: Configure analysis parameters and data source preferences
+### Core Features
+- **Transit Detection**: Analyze light curves for periodic transit signals using Box Least Squares (BLS)
+- **AI Classification**: Machine learning classification of exoplanet candidates vs false positives  
+- **Explainable AI**: SHAP explanations to understand model predictions and build trust
+- **Data Upload**: Analyze your own photometric time series data
+- **Settings**: Configure analysis parameters and data source preferences
 
-### 🎯 NASA Space Apps Challenge Solution
+### NASA Space Apps Challenge Solution
 This tool addresses the challenge requirements:
-- ✅ **AI/ML Model**: RandomForest classifier trained on Kepler Object of Interest (KOI) dispositions
-- ✅ **Web Interface**: Multi-page Streamlit application for accessibility
-- ✅ **Explainable Predictions**: SHAP integration provides transparency in automated classification
-- ✅ **Real NASA Data**: Direct integration with NASA Exoplanet Archive and MAST via Lightkurve
+- **AI/ML Model**: RandomForest classifier trained on Kepler Object of Interest (KOI) dispositions
+- **Web Interface**: Multi-page Streamlit application for accessibility
+- **Explainable Predictions**: SHAP integration provides transparency in automated classification
+- **Real NASA Data**: Direct integration with NASA Exoplanet Archive and MAST via Lightkurve
+""")
 
-### 📊 Test Targets
+# Technical Specifications
+st.markdown("## Technical Specifications")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+    <div class="tech-stack">
+        <h4>Data Sources</h4>
+        <ul>
+            <li><strong>TESS</strong> - Transiting Exoplanet Survey Satellite</li>
+            <li><strong>Kepler/K2</strong> - Kepler Space Telescope missions</li>
+            <li><strong>NASA Exoplanet Archive</strong> - KOI catalog</li>
+            <li><strong>MAST</strong> - Barbara A. Mikulski Archive</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown("""
+    <div class="tech-stack">
+        <h4>Machine Learning Stack</h4>
+        <ul>
+            <li><strong>Algorithm</strong> - Random Forest Classifier</li>
+            <li><strong>Features</strong> - 8 KOI parameters (period, depth, etc.)</li>
+            <li><strong>Training Data</strong> - ~9,000 KOI candidates</li>
+            <li><strong>Explainability</strong> - SHAP (SHapley Additive exPlanations)</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("""
+### Test Targets
 Try these confirmed exoplanet systems:
 - **Kepler-186f** - Earth-size planet in habitable zone
-- **TRAPPIST-1** - Seven Earth-size planets
+- **TRAPPIST-1** - Seven Earth-size planets  
 - **TOI-715 b** - Recent TESS super-Earth discovery
 - **K2-18 b** - Sub-Neptune with potential atmospheric water vapor
 """)
