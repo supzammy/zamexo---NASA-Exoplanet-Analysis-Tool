@@ -1,17 +1,15 @@
+import sys
+import os
 import streamlit as st
-import lightkurve as lk
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pathlib import Path
+import lightkurve as lk
 
-st.set_page_config(page_title="Transit Detection", page_icon="🔍", layout="wide")
+# Import shared utilities
+from shared_utils import summarize_lightcurve, professional_bls
 
-# Import shared helpers from root level
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
+# Additional helper for this page
 def _clean_series(x):
     if hasattr(x, 'value'):
         x = x.value
@@ -20,109 +18,6 @@ def _clean_series(x):
         arr = np.asarray(arr.filled(np.nan), dtype=float)
     return arr
 
-def summarize_lightcurve(time, flux):
-    t = _clean_series(time); f = _clean_series(flux)
-    m = np.isfinite(t) & np.isfinite(f)
-    t, f = t[m], f[m]
-    if t.size == 0:
-        return {}
-    med = np.nanmedian(f)
-    mad = np.nanmedian(np.abs(f - med)) * 1.4826 if np.isfinite(med) else np.nan
-    dt = np.diff(np.sort(t))
-    return {
-        'n_points': int(f.size),
-        'baseline_days': float(t.max() - t.min()) if t.size else 0,
-        'cadence_days': float(np.median(dt)) if dt.size else np.nan,
-        'mean_flux': float(np.nanmean(f)) if f.size else np.nan,
-        'std_flux': float(np.nanstd(f)) if f.size else np.nan,
-        'median_flux': float(med),
-        'robust_rms': float(mad),
-        'frac_rms': float((np.nanstd(f)/med) if (f.size and med!=0) else np.nan),
-    }
-
-def simple_bls(time, flux, max_period):
-    """Simple BLS implementation with improved SDE calculation."""
-    t = _clean_series(time); f = _clean_series(flux)
-    m = np.isfinite(t) & np.isfinite(f)
-    t, f = t[m], f[m]
-    if t.size < 10:
-        return {'period': np.nan,'duration': np.nan,'depth': np.nan,'sde': np.nan,'t0': np.nan}
-    
-    t = t - t.min()
-    baseline = np.nanmedian(f)
-    if np.isfinite(baseline) and baseline != 0:
-        f = f/baseline - 1.0
-    else:
-        f = f - np.nanmean(f)
-    
-    # Basic autocorrelation-based period detection
-    n = min(f.size, 4000)
-    f2 = f[:n] - np.nanmean(f[:n])
-    
-    try:
-        ac = np.correlate(f2, f2, mode='full')[n-1:]
-    except (TypeError, ValueError):
-        return {'period': np.nan,'duration': np.nan,'depth': np.nan,'sde': np.nan,'t0': np.nan}
-    
-    ac[0] = 0
-    lag = int(np.argmax(ac[1:])+1)
-    dt = np.median(np.diff(t)) if t.size > 1 else np.nan
-    period = float(lag*dt) if np.isfinite(dt) else np.nan
-    
-    if not (np.isfinite(period) and 0.5 < period <= max_period):
-        period = np.nan
-    
-    # Calculate transit depth and SDE
-    if np.isfinite(period):
-        # Phase fold and calculate depth
-        phase = (t % period) / period
-        phase_sorted_idx = np.argsort(phase)
-        f_sorted = f[phase_sorted_idx]
-        
-        # Simple box search for transit
-        n_bins = min(100, len(f_sorted) // 10)
-        if n_bins > 5:
-            bin_size = len(f_sorted) // n_bins
-            bin_means = []
-            for i in range(n_bins):
-                start = i * bin_size
-                end = min((i + 1) * bin_size, len(f_sorted))
-                if end > start:
-                    bin_means.append(np.nanmean(f_sorted[start:end]))
-            
-            if bin_means:
-                bin_means = np.array(bin_means)
-                depth = np.nanmin(bin_means)
-                
-                # Calculate SDE (simplified)
-                noise_std = np.nanstd(f)
-                if noise_std > 0:
-                    sde = abs(depth) / noise_std * np.sqrt(len(f) * 0.1)  # Rough SDE estimate
-                else:
-                    sde = 0.0
-            else:
-                depth = np.nan
-                sde = np.nan
-        else:
-            depth = np.nanpercentile(f, 5)  # Fallback depth estimate
-            noise_std = np.nanstd(f)
-            sde = abs(depth) / noise_std * np.sqrt(len(f) * 0.05) if noise_std > 0 else 0.0
-        
-        # Duration estimate (5% of period as default)
-        duration = period * 0.05
-    else:
-        depth = np.nan
-        duration = np.nan
-        sde = np.nan
-    
-    return {
-        'period': period,
-        'duration': duration,
-        'depth': depth,
-        'sde': sde,
-        't0': float(t.min()) if t.size > 0 else np.nan
-    }
-
 st.title("🔍 Transit Detection")
 
 # Sidebar controls
@@ -130,12 +25,24 @@ with st.sidebar:
     st.subheader("Input")
     mission = st.selectbox("Mission", ["Auto","Kepler","TESS","K2"], index=0)
     target = st.text_input("Target (e.g., Kepler-10)", "")
-    max_period = st.slider("Max period [days]", 1.0, 50.0, 10.0, step=0.5)
+    
+    # Period search settings
+    st.write("**Period Search Settings:**")
+    period_input_method = st.radio("Set max period by:", ["Slider", "Manual Input"], horizontal=True)
+    
+    if period_input_method == "Slider":
+        max_period = st.slider("Max period [days]", 1.0, 365.0, 10.0, step=0.5)
+    else:
+        max_period = st.number_input("Max period [days]", min_value=1.0, max_value=365.0, value=10.0, step=0.5)
+    
+    st.caption(f"Searching for planets with periods up to {max_period:.1f} days")
+    
     uploaded = st.file_uploader("Upload CSV (time,flux)", type=['csv'])
     run_btn = st.button("🚀 Run Analysis")
     
     if st.button("Clear Cache"):
-        import shutil, pathlib
+        import shutil
+        import pathlib
         cache_dir = pathlib.Path.home()/".lightkurve"/"cache"/"mastDownload"
         shutil.rmtree(cache_dir, ignore_errors=True)
         st.success("Cache cleared.")
@@ -310,7 +217,7 @@ if time_arr is not None:
     st.subheader("🔍 Transit Detection")
     
     with st.spinner("Running Box Least Squares analysis..."):
-        bls = simple_bls(time_arr, flux_arr, max_period=max_period)
+        bls = professional_bls(time_arr, flux_arr, max_period=max_period)
     
     # BLS results
     col1, col2, col3 = st.columns(3)
@@ -348,7 +255,7 @@ if time_arr is not None:
         # Quick navigation to next step
         st.success("✅ **Transit analysis complete!** Ready for AI classification.")
         if st.button("🤖 Continue to AI Classification", type="primary"):
-            st.switch_page("pages/2_AI_Classification.py")
+            st.switch_page("pages/2_🤖_AI_Classification.py")
         
     else:
         st.warning("⚠️ **No strong transit signal detected**")
@@ -359,7 +266,7 @@ if time_arr is not None:
         • The true period might be longer than your maximum period setting
         
         **What to try:**
-        • Increase the maximum period (try 50-100 days)
+        • Increase the maximum period (try 100-365 days for long-period planets)
         • Try a different, well-known target (e.g., `TRAPPIST-1`, `Kepler-10b`)
         • Check the light curve for obvious issues in the plot above
         """)
@@ -373,7 +280,7 @@ if time_arr is not None:
         
         # Always show button to continue
         if st.button("🤖 Analyze with AI Anyway", type="secondary"):
-            st.switch_page("pages/2_AI_Classification.py")
+            st.switch_page("pages/2_🤖_AI_Classification.py")
         
     # Additional analysis options
     with st.expander("🔧 Advanced Options"):

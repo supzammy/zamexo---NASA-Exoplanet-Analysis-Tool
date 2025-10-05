@@ -10,6 +10,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+# Import shared utilities
+from shared_utils import summarize_lightcurve, professional_bls
+
 def _clean_series(x):
     if hasattr(x, 'value'):
         x = x.value
@@ -17,53 +20,6 @@ def _clean_series(x):
     if np.ma.isMaskedArray(arr):
         arr = np.asarray(arr.filled(np.nan), dtype=float)
     return arr
-
-def summarize_lightcurve(time, flux):
-    t = _clean_series(time); f = _clean_series(flux)
-    m = np.isfinite(t) & np.isfinite(f)
-    t, f = t[m], f[m]
-    if t.size == 0:
-        return {}
-    med = np.nanmedian(f)
-    mad = np.nanmedian(np.abs(f - med)) * 1.4826 if np.isfinite(med) else np.nan
-    dt = np.diff(np.sort(t))
-    return {
-        'n_points': int(f.size),
-        'baseline_days': float(t.max() - t.min()) if t.size else 0,
-        'cadence_days': float(np.median(dt)) if dt.size else np.nan,
-        'mean_flux': float(np.nanmean(f)) if f.size else np.nan,
-        'std_flux': float(np.nanstd(f)) if f.size else np.nan,
-        'median_flux': float(med),
-        'robust_rms': float(mad),
-        'frac_rms': float((np.nanstd(f)/med) if (f.size and med!=0) else np.nan),
-    }
-
-def simple_bls(time, flux, max_period):
-    t = _clean_series(time); f = _clean_series(flux)
-    m = np.isfinite(t) & np.isfinite(f)
-    t, f = t[m], f[m]
-    if t.size < 10:
-        return {'period': np.nan,'duration': np.nan,'depth': np.nan,'sde': np.nan,'t0': np.nan}
-    t = t - t.min()
-    med = np.nanmedian(f)
-    if np.isfinite(med) and med!=0:
-        f = f/med - 1.0
-    else:
-        f = f - np.nanmean(f)
-    n = min(f.size, 4000)
-    f2 = f[:n] - np.nanmean(f[:n])
-    try:
-        ac = np.correlate(f2, f2, mode='full')[n-1:]
-    except TypeError:
-        return {'period': np.nan,'duration': np.nan,'depth': np.nan,'sde': np.nan,'t0': np.nan}
-    ac[0]=0
-    lag = int(np.argmax(ac[1:])+1)
-    dt = np.median(np.diff(t)) if t.size>1 else np.nan
-    period = float(lag*dt) if np.isfinite(dt) else np.nan
-    if not (np.isfinite(period) and 0 < period <= max_period):
-        period = np.nan
-    depth = float(np.nanpercentile(f,2)) if np.isfinite(period) else np.nan
-    return {'period': period,'duration': period*0.05 if np.isfinite(period) else np.nan,'depth': depth,'sde': np.nan,'t0': float(t.min())}
 
 st.title("📤 Data Upload")
 
@@ -253,7 +209,7 @@ if uploaded_file is not None:
             
             # Run BLS analysis
             with st.spinner("Running transit detection..."):
-                bls_results = simple_bls(time_clean, flux_clean, max_period)
+                bls_results = professional_bls(time_clean, flux_clean, max_period)
             
             st.session_state['bls_results'] = bls_results
             
@@ -304,7 +260,7 @@ elif 'synthetic_data' in st.session_state:
         st.session_state['source_label'] = "Synthetic data"
         
         # Run BLS
-        bls_results = simple_bls(time_clean, flux_clean, 10.0)
+        bls_results = professional_bls(time_clean, flux_clean, 10.0)
         st.session_state['bls_results'] = bls_results
         
         st.success("✅ Synthetic data ready for analysis!")

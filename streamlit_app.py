@@ -1,14 +1,15 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 st.set_page_config(
-    page_title="ZAMEXO - NASA Exoplanet Analysis Tool",
-    page_icon="🌍",
+    page_title="ZAMEXO - Home",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Main title
+st.title("� Home")
+st.markdown("### Welcome to the ZAMEXO Analysis Platform")
 
 # Professional CSS styling
 st.markdown("""
@@ -102,10 +103,38 @@ st.markdown("""
         font-size: 0.9rem;
     }
     .tech-stack {
-        background: linear-gradient(145deg, #F1F5F9 0%, #E2E8F0 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid #2563EB;
+        background: linear-gradient(145deg, #F1F5F9 0%, #E2E8F0 100%) !important;
+        padding: 1.5rem !important;
+        border-radius: 12px !important;
+        border-left: 4px solid #2563EB !important;
+        color: #1F2937 !important;
+    }
+    .tech-stack h4 {
+        color: #1B365D !important;
+        margin-bottom: 1rem !important;
+        font-weight: 600 !important;
+    }
+    .tech-stack h5 {
+        color: #374151 !important;
+        margin-bottom: 0.5rem !important;
+        font-weight: 600 !important;
+    }
+    .tech-stack ul {
+        color: #4B5563 !important;
+    }
+    .tech-stack li {
+        color: #4B5563 !important;
+        margin-bottom: 0.3rem !important;
+    }
+    .tech-stack strong {
+        color: #1F2937 !important;
+    }
+    /* Force text color for all elements inside tech-stack */
+    .tech-stack * {
+        color: #4B5563 !important;
+    }
+    .tech-stack h4, .tech-stack h5 {
+        color: #1B365D !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -154,6 +183,15 @@ st.markdown("""
 st.markdown("## About ZAMEXO")
 st.markdown("""
 **ZAMEXO** leverages real NASA data and machine learning to detect and classify exoplanets from light curve observations.
+
+**New to exoplanet analysis?** Follow this workflow:
+1. **🔍 Transit Detection** → Enter target name (e.g., `Kepler-186`) → Run BLS analysis
+2. **🤖 AI Classification** → Review ML prediction and confidence scores  
+3. **🔬 Explainable AI** → Understand which features influenced the decision
+4. **📊 Data Upload** → Upload your own CSV files for custom analysis
+5. **⚙️ Settings** → Configure analysis parameters and data preferences
+
+**Pro tip**: Start with well-known systems like `TRAPPIST-1` or `Kepler-452` to see the full workflow.
 
 **Select a tool from the sidebar** to explore different features:
 
@@ -211,102 +249,6 @@ Try these confirmed exoplanet systems:
 - **TOI-715 b** - Recent TESS super-Earth discovery
 - **K2-18 b** - Sub-Neptune with potential atmospheric water vapor
 """)
-
-# Analysis workflow
-st.markdown("## Analysis Workflow")
-
-st.markdown("""
-<div class="workflow-step" data-step="1">
-    <h4>Data Acquisition</h4>
-    <p>Connect to NASA's Exoplanet Archive and retrieve light curve data from TESS, Kepler, or K2 missions. 
-    Search by target name or coordinates. Upload custom CSV files with time-series photometry.</p>
-</div>
-
-<div class="workflow-step" data-step="2">
-    <h4>Transit Detection</h4>
-    <p>Apply Box Least Squares (BLS) periodogram to search for periodic transit signals. 
-    Identify potential orbital periods, transit depths, and durations. Generate phase-folded light curves.</p>
-</div>
-
-<div class="workflow-step" data-step="3">
-    <h4>Machine Learning Classification</h4>d
-    <p>Extract 15+ statistical features from light curves and BLS results. 
-    Apply trained RandomForest model to classify targets as CANDIDATE, FALSE POSITIVE, or CONFIRMED.</p>
-</div>
-
-<div class="workflow-step" data-step="4">
-    <h4>Explainable AI Analysis</h4>
-    <p>Generate SHAP (SHapley Additive exPlanations) to understand feature contributions. 
-    Visualize which measurements drove the classification decision for transparency.</p>
-</div>""", unsafe_allow_html=True)
-
-# Navigation and getting started
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.markdown("## Getting Started")
-    st.markdown("""
-    **New to exoplanet analysis?** Follow this workflow:
-    
-    1. **Transit Detection** → Enter target name (e.g., `Kepler-186`) → Run BLS analysis
-    2. **AI Classification** → Review ML prediction and confidence scores  
-    3. **Explainable AI** → Understand which features influenced the decision
-    4. **Data Upload** → Upload your own CSV files for custom analysis
-    5. **⚙️ Settings** → Configure analysis parameters and data preferences
-    
-    **Pro tip**: Start with well-known systems like `TRAPPIST-1` or `Kepler-452` to see the full workflow.
-    """)
-
-with col2:
-    st.markdown("## Research Targets")
-    
-    research_targets = {
-        "Kepler-452b": "Most Earth-like exoplanet",
-        "HD 209458b": "First detected transit", 
-        "WASP-12b": "Ultra-hot Jupiter (2500K)",
-        "GJ 1214b": "Super-Earth with atmosphere",
-        "Proxima Cen b": "Nearest known exoplanet"
-    }
-    
-    for target, description in research_targets.items():
-        st.markdown(f"**{target}**  \n*{description}*")
-
-# Technical specifications
-st.markdown("## Technical Specifications")
-
-st.markdown("""
-<div class="tech-stack">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-        <div>
-            <h5>Data Sources</h5>
-            <ul style="margin: 0; padding-left: 1rem;">
-                <li>NASA Exoplanet Archive</li>
-                <li>MAST (Lightkurve)</li>
-                <li>Kepler/K2/TESS missions</li>
-                <li>Custom CSV uploads</li>
-            </ul>
-        </div>
-        <div>
-            <h5>Machine Learning</h5>
-            <ul style="margin: 0; padding-left: 1rem;">
-                <li>RandomForest Classifier</li>
-                <li>Feature engineering pipeline</li>
-                <li>SHAP model explanations</li>
-                <li>Cross-validation training</li>
-            </ul>
-        </div>
-        <div>
-            <h5>Transit Detection</h5>
-            <ul style="margin: 0; padding-left: 1rem;">
-                <li>Box Least Squares (BLS)</li>
-                <li>Period-folded analysis</li>
-                <li>Signal detection efficiency</li>
-                <li>Transit parameter extraction</li>
-            </ul>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 # Footer with attribution
 st.markdown("---")

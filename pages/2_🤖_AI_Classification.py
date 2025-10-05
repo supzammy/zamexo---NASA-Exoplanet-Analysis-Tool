@@ -16,6 +16,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+from shared_utils import summarize_lightcurve, professional_bls
+
 @st.cache_data(show_spinner=False)
 def load_artifacts():
     """Load ML model and metadata, training if necessary."""
@@ -122,7 +124,6 @@ def run_inference(model, feature_cols, bls):
         scores = dict(zip(classes, map(float, proba)))
         
         # Enhanced false positive detection logic
-        max_prob = max(proba)
         pred_idx = int(np.argmax(proba))
         label = classes[pred_idx]
         
@@ -298,7 +299,7 @@ if label is None:
 st.session_state['ml_prediction'] = {
     'label': label,
     'probabilities': probs,
-    'features': X_pred.values.tolist() if X_pred is not None else None,
+    'features': X_pred if X_pred is not None else None,  # Keep as DataFrame
     'feature_names': feature_cols
 }
 
@@ -331,7 +332,7 @@ if 'validation_warnings' in st.session_state and st.session_state['validation_wa
 if confidence > 0.5:  # Only show if we have reasonable confidence
     st.info("🔬 **Want to understand why?** Visit the Explainable AI page to see which features influenced this prediction.")
     if st.button("🔬 Explain This Prediction", type="secondary"):
-        st.switch_page("pages/3_Explainable_AI.py")
+        st.switch_page("pages/3_🔬_Explainable_AI.py")
 
 # Probability breakdown
 if probs:
@@ -424,11 +425,3 @@ if label == "CONFIRMED":
 
 for step in next_steps:
     st.write(f"- {step}")
-
-# Store prediction results for explainability page
-st.session_state['ml_prediction'] = {
-    'label': label,
-    'probabilities': probs,
-    'confidence': confidence,
-    'features': X_pred
-}

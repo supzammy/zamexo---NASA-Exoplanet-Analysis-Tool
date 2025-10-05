@@ -4,21 +4,30 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+import sys
+import os
 
 st.set_page_config(page_title="Explainable AI", page_icon="🔬", layout="wide")
 
+# Import path setup
+# Ensure the project root is in the path for shared_utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # SHAP imports with fallback
 try:
-    import shap  # type: ignore
+    import shap
     _HAS_SHAP = True
-except Exception:
-    shap = None  # type: ignore
+except ImportError as e:
+    shap = None
     _HAS_SHAP = False
+    # Now we can safely use sys here
+    st.session_state['shap_import_error'] = {
+        "error": str(e),
+        "executable": sys.executable,
+        "path": sys.path
+    }
 
-# Import path setup
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from shared_utils import summarize_lightcurve, professional_bls
 
 @st.cache_data(show_spinner=False)
 def load_artifacts():
@@ -95,12 +104,16 @@ def get_shap_plot(model, X):
         return None, None
         
     try:
-        # Ensure X is properly formatted
+        # Ensure X is properly formatted and single sample
         if not isinstance(X, pd.DataFrame):
             return None, None
             
-        shap_values = explainer.shap_values(X)
-        proba = model.predict_proba(X)[0]
+        # Always use only the first row to ensure single sample
+        X_single = X.iloc[[0]]  # Keep as DataFrame with single row
+        X_values = X.iloc[0]    # Series for feature values
+        
+        shap_values = explainer.shap_values(X_single)
+        proba = model.predict_proba(X_single)[0]
         predicted_class = int(np.argmax(proba))
         
         # Handle different SHAP value formats
@@ -115,27 +128,54 @@ def get_shap_plot(model, X):
             shap_vals = shap_values
             
         # Ensure we have the right shape for a single sample
-        if len(shap_vals.shape) > 1:
+        shap_vals = np.asarray(shap_vals)  # Ensure it's a numpy array
+        if shap_vals.ndim > 1:
             shap_vals = shap_vals[0]  # Take first sample
+        shap_vals = shap_vals.flatten()  # Ensure 1D
         
-        # Force plot
-        fig, ax = plt.subplots(figsize=(12, 3))
-        
+        # Force plot - try different approaches for compatibility
         expected_value = explainer.expected_value
-        if isinstance(expected_value, (list, np.ndarray)) and len(expected_value) > predicted_class:
-            exp_val = expected_value[predicted_class]
+        
+        # Handle expected_value safely
+        if isinstance(expected_value, (list, np.ndarray)):
+            expected_len = len(expected_value) if hasattr(expected_value, '__len__') else 1
+            if expected_len > predicted_class:
+                exp_val = float(expected_value[predicted_class])
+            else:
+                exp_val = float(expected_value[0]) if expected_len > 0 else 0.0
         else:
-            exp_val = expected_value
+            exp_val = float(expected_value)
+        
+        try:
+            # Try modern SHAP approach with single sample
+            fig = plt.figure(figsize=(12, 3))
             
-        shap.force_plot(
-            exp_val,
-            shap_vals,
-            X.iloc[0],
-            matplotlib=True,
-            show=False,
-            ax=ax
-        )
-        fig.tight_layout()
+            # Ensure all values are proper scalars/arrays
+            exp_val_scalar = float(exp_val)
+            shap_vals_array = np.asarray(shap_vals, dtype=float)
+            
+            shap.force_plot(
+                exp_val_scalar,
+                shap_vals_array,
+                X_values,  # Pass Series instead of DataFrame
+                matplotlib=True,
+                show=False
+            )
+            fig.tight_layout()
+        except Exception as e:
+            # Fallback approach - create custom bar plot
+            print(f"SHAP error: {e}")  # Debug info
+            fig, ax = plt.subplots(figsize=(12, 3))
+            feature_names = X.columns.tolist()
+            shap_vals_safe = np.asarray(shap_vals, dtype=float).flatten()
+            colors = ['red' if val > 0 else 'blue' for val in shap_vals_safe]
+            ax.bar(range(len(shap_vals_safe)), shap_vals_safe, color=colors, alpha=0.7)
+            ax.set_xticks(range(len(feature_names)))
+            ax.set_xticklabels(feature_names, rotation=45, ha='right')
+            ax.set_ylabel('SHAP Value')
+            ax.set_title(f'Feature Contributions (Base: {float(exp_val):.3f})')
+            ax.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+            fig.tight_layout()
         
         return fig, shap_vals
     except Exception as e:
@@ -170,8 +210,6 @@ def plot_feature_importance(importances, feature_cols):
     
     fig.tight_layout()
     st.pyplot(fig, clear_figure=True)
-
-st.title("🔬 Explainable AI")
 
 st.title("🔬 Explainable AI")
 
@@ -252,8 +290,15 @@ st.subheader("🔍 Individual Prediction Explanation (SHAP)")
 
 if not _HAS_SHAP:
     st.error("❌ **SHAP not available**")
-    st.write("SHAP (SHapley Additive exPlanations) is not installed in this environment.")
-    st.code("pip install shap", language="bash")
+    st.write("SHAP (SHapley Additive exPlanations) is not installed or accessible in this environment.")
+    
+    if 'shap_import_error' in st.session_state:
+        with st.expander("Technical Details"):
+            st.write("Here is the detailed error information:")
+            st.json(st.session_state['shap_import_error'])
+    else:
+        st.code("pip install shap", language="bash")
+    
     st.info("SHAP provides detailed explanations of individual predictions by showing how each feature contributes.")
 else:
     st.write("SHAP shows **how each feature contributed** to this specific prediction:")
@@ -272,24 +317,34 @@ else:
         st.write("- **Base value**: Model's average prediction")
         
         # Feature contribution analysis
-        if shap_values is not None and len(shap_values) > 0:
+        if shap_values is not None and len(shap_values) > 0 and X_features is not None and not X_features.empty:
             st.subheader("📊 Feature Contribution Analysis")
             
-            # Create feature contribution dataframe
-            contrib_df = pd.DataFrame({
-                'Feature': feature_cols,
-                'Value': X_features.iloc[0].values,
-                'SHAP_Value': shap_values,
-                'Contribution': ['Positive' if sv > 0 else 'Negative' for sv in shap_values]
-            })
-            contrib_df['Abs_SHAP'] = np.abs(contrib_df['SHAP_Value'])
-            contrib_df = contrib_df.sort_values('Abs_SHAP', ascending=False)
+            # Ensure all arrays have the same length with robust checks
+            shap_values_flat = np.asarray(shap_values).flatten()
+            feature_values = X_features.iloc[0].values
             
-            # Show top contributing features
-            st.write("**Top Contributing Features:**")
-            for i, row in contrib_df.head(5).iterrows():
-                direction = "↗️" if row['SHAP_Value'] > 0 else "↘️"
-                st.write(f"{direction} **{row['Feature']}**: {row['SHAP_Value']:+.3f} (value: {row['Value']:.3g})")
+            num_features = len(feature_cols)
+            
+            # Check if arrays match the expected number of features
+            if len(shap_values_flat) == num_features and len(feature_values) == num_features:
+                contrib_df = pd.DataFrame({
+                    'Feature': feature_cols,
+                    'Value': feature_values,
+                    'SHAP_Value': shap_values_flat,
+                    'Contribution': ['Positive' if sv > 0 else 'Negative' for sv in shap_values_flat]
+                })
+                contrib_df['Abs_SHAP'] = np.abs(contrib_df['SHAP_Value'])
+                contrib_df = contrib_df.sort_values('Abs_SHAP', ascending=False)
+                
+                # Show top contributing features
+                st.write("**Top Contributing Features:**")
+                for i, row in contrib_df.head(5).iterrows():
+                    direction = "↗️" if row['SHAP_Value'] > 0 else "↘️"
+                    st.write(f"{direction} **{row['Feature']}**: {row['SHAP_Value']:+.3f} (value: {row['Value']:.3g})")
+            else:
+                st.warning("⚠️ Could not generate feature contribution table due to mismatched data lengths.")
+                st.caption(f"Debug info: Features({len(feature_cols)}), Values({len(feature_values)}), SHAP({len(shap_values_flat)})")
             
             # Feature values vs training statistics
             if feature_stats:

@@ -7,6 +7,8 @@ st.set_page_config(page_title="Settings", page_icon="⚙️", layout="wide")
 # Import path setup
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+from shared_utils import summarize_lightcurve, professional_bls
+
 st.title("⚙️ Settings & Configuration")
 
 st.write("""
@@ -211,13 +213,13 @@ with st.expander("📋 Environment Details"):
         try:
             import streamlit
             st.code(f"Streamlit: {streamlit.__version__}")
-        except:
+        except ImportError:
             st.code("Streamlit: unknown")
         
         try:
             import sklearn
             st.code(f"scikit-learn: {sklearn.__version__}")
-        except:
+        except ImportError:
             st.code("scikit-learn: unknown")
     
     with col2:

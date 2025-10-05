@@ -5,7 +5,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import lightkurve as lk
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -360,7 +359,8 @@ def main():
             st.warning("SHAP library not installed in this environment.")
         st.caption("Model + transit feature pipeline demo. Upload or specify target.")
         if st.button("Clear Lightkurve Cache"):
-            import shutil, os, pathlib
+            import shutil
+            import pathlib
             cache_dir = pathlib.Path.home()/".lightkurve"/"cache"/"mastDownload"
             shutil.rmtree(cache_dir, ignore_errors=True)
             st.success("Cache cleared.")
