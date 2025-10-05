@@ -217,29 +217,28 @@ st.markdown("## Analysis Workflow")
 
 st.markdown("""
 <div class="workflow-step" data-step="1">
-    <h4>🔍 Data Acquisition</h4>
+    <h4>Data Acquisition</h4>
     <p>Connect to NASA's Exoplanet Archive and retrieve light curve data from TESS, Kepler, or K2 missions. 
     Search by target name or coordinates. Upload custom CSV files with time-series photometry.</p>
 </div>
 
 <div class="workflow-step" data-step="2">
-    <h4>📊 Transit Detection</h4>
+    <h4>Transit Detection</h4>
     <p>Apply Box Least Squares (BLS) periodogram to search for periodic transit signals. 
     Identify potential orbital periods, transit depths, and durations. Generate phase-folded light curves.</p>
 </div>
 
 <div class="workflow-step" data-step="3">
-    <h4>🤖 Machine Learning Classification</h4>
+    <h4>Machine Learning Classification</h4>d
     <p>Extract 15+ statistical features from light curves and BLS results. 
     Apply trained RandomForest model to classify targets as CANDIDATE, FALSE POSITIVE, or CONFIRMED.</p>
 </div>
 
 <div class="workflow-step" data-step="4">
-    <h4>🔬 Explainable AI Analysis</h4>
+    <h4>Explainable AI Analysis</h4>
     <p>Generate SHAP (SHapley Additive exPlanations) to understand feature contributions. 
     Visualize which measurements drove the classification decision for transparency.</p>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
 # Navigation and getting started
 col1, col2 = st.columns([2, 1])
@@ -249,10 +248,10 @@ with col1:
     st.markdown("""
     **New to exoplanet analysis?** Follow this workflow:
     
-    1. **🔍 Transit Detection** → Enter target name (e.g., `Kepler-186`) → Run BLS analysis
-    2. **🤖 AI Classification** → Review ML prediction and confidence scores  
-    3. **🔬 Explainable AI** → Understand which features influenced the decision
-    4. **📤 Data Upload** → Upload your own CSV files for custom analysis
+    1. **Transit Detection** → Enter target name (e.g., `Kepler-186`) → Run BLS analysis
+    2. **AI Classification** → Review ML prediction and confidence scores  
+    3. **Explainable AI** → Understand which features influenced the decision
+    4. **Data Upload** → Upload your own CSV files for custom analysis
     5. **⚙️ Settings** → Configure analysis parameters and data preferences
     
     **Pro tip**: Start with well-known systems like `TRAPPIST-1` or `Kepler-452` to see the full workflow.

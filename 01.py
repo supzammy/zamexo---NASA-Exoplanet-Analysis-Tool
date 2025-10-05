@@ -109,7 +109,7 @@ def plot_importances(importances, feature_cols):
 #streamlit run app/streamlit_app.
 @st.cache_resource(show_spinner=False)
 def _get_shap_explainer(_model):
-    if not _HAS_SHAP or model is None:
+    if not _HAS_SHAP or _model is None:
         return None
     try:
         return shap.TreeExplainer(_model)
@@ -561,10 +561,3 @@ if __name__ == "__main__":
     except Exception as e:  # final guard so Streamlit can render the traceback nicely
         import logging
         logging.exception("Fatal error in main(): %s", e)
-
-test-batch:
-	@set -e; \\
-	for f in tests/test_*.py; do \\
-	  echo "Running $$f"; \\
-	  pytest -q $$f || exit 1; \\
-	done

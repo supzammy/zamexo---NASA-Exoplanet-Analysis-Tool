@@ -22,19 +22,35 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 @st.cache_data(show_spinner=False)
 def load_artifacts():
-    """Load ML model and metadata."""
+    """Load ML model and metadata, training if necessary."""
     model = None
     feature_cols = []
     feature_stats = {}
     importances = {}
     
     models_dir = Path('models')
+    model_path = models_dir/'model.joblib'
+    
+    # Check if model exists, if not train a lightweight version
+    if not model_path.exists():
+        st.warning("Model not found. Training lightweight model for demonstration...")
+        try:
+            # Import and run the lightweight trainer
+            from utils.model_trainer import train_lightweight_model
+            model, feature_cols, feature_stats, importances = train_lightweight_model()
+            st.success("Model trained successfully!")
+            return model, feature_cols, feature_stats, importances
+        except Exception as e:
+            st.error(f"Failed to train model: {str(e)}")
+            return None, [], {}, {}
+    
+    # Load existing model
     try:
         import joblib  # type: ignore
-        mp = models_dir/'model.joblib'
-        if mp.exists():
-            model = joblib.load(mp)
-    except Exception:
+        if model_path.exists():
+            model = joblib.load(model_path)
+    except Exception as e:
+        st.error(f"Failed to load model: {str(e)}")
         model = None
         
     def _load_json(p):
@@ -48,6 +64,8 @@ def load_artifacts():
     feature_cols = _load_json(models_dir/'feature_cols.json') or []
     feature_stats = _load_json(models_dir/'feature_stats.json') or {}
     importances = _load_json(models_dir/'importances.json') or {}
+    
+    return model, feature_cols, feature_stats, importances
     
     return model, feature_cols, feature_stats, importances
 

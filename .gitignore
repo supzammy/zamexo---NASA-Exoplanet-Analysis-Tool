@@ -247,3 +247,4 @@ lint:
 test:
     @PYTHONPATH=$(PWD):$$PYTHONPATH python3 -m pytest -q
 
+models/model.joblib
