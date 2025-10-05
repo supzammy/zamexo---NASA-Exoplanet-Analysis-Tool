@@ -147,25 +147,28 @@ def get_shap_plot(model, X):
             exp_val = float(expected_value)
         
         try:
-            # CORRECT APPROACH for Streamlit + Matplotlib
-            # 1. Call shap.force_plot which creates a figure implicitly.
-            # 2. Get the current figure using plt.gcf().
-            # 3. Pass this figure to st.pyplot().
+            # FINAL, MOST ROBUST APPROACH:
+            # This pattern is the most reliable for SHAP + Matplotlib + Streamlit.
+            # 1. Clear any existing plot state.
+            # 2. Call force_plot, which implicitly creates a new figure.
+            # 3. Immediately grab the current figure handle.
+            # 4. Pass this handle to st.pyplot() before any other plotting command can interfere.
+            plt.close('all')
             
-            # Ensure all values are proper scalars/arrays
             exp_val_scalar = float(exp_val)
             shap_vals_array = np.asarray(shap_vals, dtype=float)
             
             shap.force_plot(
                 exp_val_scalar,
                 shap_vals_array,
-                X_values,  # Pass Series instead of DataFrame
+                X_values,
                 matplotlib=True,
                 show=False,
-                figsize=(12, 3) # Pass figsize here
+                figsize=(12, 3)
             )
-            fig = plt.gcf() # Get the current figure created by SHAP
+            fig = plt.gcf()
             fig.tight_layout()
+
         except Exception as e:
             # Fallback approach - create custom bar plot
             print(f"SHAP error: {e}")  # Debug info
@@ -311,7 +314,11 @@ else:
         shap_fig, shap_values = get_shap_plot(model, X_features)
     
     if shap_fig is not None:
-        st.pyplot(shap_fig, clear_figure=True)
+        # By setting clear_figure=False, we prevent Streamlit from closing the figure
+        # prematurely, which can cause the "I/O operation on closed file" error.
+        # We already call plt.close('all') at the start of the plot function
+        # to manage memory.
+        st.pyplot(shap_fig, clear_figure=False)
         
         # Explain the SHAP plot
         st.write("**How to read this plot:**")
