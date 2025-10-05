@@ -145,22 +145,22 @@ def get_shap_plot(model, X):
                 exp_val = float(expected_value[0]) if expected_len > 0 else 0.0
         else:
             exp_val = float(expected_value)
-
+        
         try:
+            # Try modern SHAP approach with single sample
+            fig = plt.figure(figsize=(12, 3))
+            
             # Ensure all values are proper scalars/arrays
             exp_val_scalar = float(exp_val)
             shap_vals_array = np.asarray(shap_vals, dtype=float)
-
-            # Let SHAP create the plot, then grab the current figure.
-            # This avoids the "closed file" error with matplotlib.
+            
             shap.force_plot(
                 exp_val_scalar,
                 shap_vals_array,
-                X_values,
+                X_values,  # Pass Series instead of DataFrame
                 matplotlib=True,
                 show=False
             )
-            fig = plt.gcf()  # Get current figure created by SHAP
             fig.tight_layout()
         except Exception as e:
             # Fallback approach - create custom bar plot
