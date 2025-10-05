@@ -224,9 +224,9 @@ def fold_curve(time: np.ndarray, period: float, t0: float) -> tuple[np.ndarray, 
     if not (np.isfinite(period) and np.isfinite(t0) and period > 0):
         return np.zeros_like(t), np.arange(t.size)
     phase = ((t - t0) % period) / period
+    # Shift to range [-0.5, 0.5) for easier transit centering
+    phase[phase >= 0.5] -= 1.0
     order = np.argsort(phase)
-    assert phase.min() >= 0.0
-    assert phase.max() <= 1.0
     return phase, order
 
 
@@ -239,3 +239,20 @@ def fetch_k2_table(cache_path=None, force=False):
     return pd.DataFrame()
 
 OUT_DIR = "models"
+
+
+def run_bls(time: np.ndarray, flux: np.ndarray, fast: bool = True, max_period: float = 50.0) -> dict:
+    """Compatibility wrapper expected by tests; returns dict of BLS features.
+
+    Parameters
+    ----------
+    time, flux : array-like
+        Light curve arrays.
+    fast : bool
+        If True use two-stage fast BLS, else fallback to standard dense scan.
+    max_period : float
+        Maximum period to search (days).
+    """
+    if fast:
+        return bls_features_fast(time, flux, max_period=max_period)
+    return bls_features(time, flux, max_period=max_period)

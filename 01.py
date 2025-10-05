@@ -10,6 +10,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import streamlit as st
+try:
+    import shap  # type: ignore
+    _HAS_SHAP = True
+except Exception:  # ModuleNotFoundError or other
+    shap = None    # type: ignore
+    _HAS_SHAP = False
 
 # Optional imports from your codebase (fall back if missing)
 try:
@@ -91,14 +97,54 @@ def plot_phase_folded(time, flux, bls, nbins=100) -> plt.Figure:
     return fig
 
 
-def plot_importances(importances):
+def plot_importances(importances, feature_cols):
     if _plot_importances:
         return _plot_importances(importances)
     if not importances:
         st.info("No feature importances available.")
         return
-    s = pd.Series(importances).sort_values(ascending=True)
+    s = pd.Series(importances, index=feature_cols).sort_values(ascending=True)
     st.bar_chart(s)
+
+#streamlit run app/streamlit_app.
+@st.cache_resource(show_spinner=False)
+def _get_shap_explainer(_model):
+    if not _HAS_SHAP or model is None:
+        return None
+    try:
+        return shap.TreeExplainer(_model)
+    except Exception:
+        return None
+
+
+def get_shap_plot(model, X):
+    """Generate a SHAP force plot for a single-row DataFrame X.
+    Returns (fig, shap_values, predicted_class_index) or (None, None, None) on failure.
+    """
+    if not _HAS_SHAP or shap is None:
+        return None, None, None
+    if model is None or X is None or X.empty or not hasattr(model, "predict_proba"):
+        return None, None, None
+    explainer = _get_shap_explainer(model)
+    if explainer is None:
+        return None, None, None
+    try:
+        shap_values = explainer.shap_values(X)
+        proba = model.predict_proba(X)[0]
+        predicted_class_index = int(np.argmax(proba))
+        fig, ax = plt.subplots(figsize=(6, 2.2))
+        shap.force_plot(
+            explainer.expected_value[predicted_class_index],
+            shap_values[predicted_class_index],
+            X.iloc[0],
+            matplotlib=True,
+            show=False,
+            ax=ax,
+        )
+        fig.tight_layout()
+        return fig, shap_values, predicted_class_index
+    except Exception:
+        return None, None, None
 
 
 @st.cache_data(show_spinner=False)
@@ -139,10 +185,10 @@ def load_artifacts():
 
 def run_inference(model, feature_cols, feature_stats, bls):
     if model is None or not feature_cols:
-        return None, {}
+        return None, {}, None
     fill = (feature_stats.get("mean") or {}) if isinstance(feature_stats, dict) else {}
     row = map_bls_to_feature_row(feature_cols, bls, fill_stats=fill)
-    X = pd.DataFrame([row], columns=feature_cols)
+    X = pd.DataFrame([row], columns=feature_cols).fillna(0)  # Fill NaNs for SHAP
     try:
         proba = model.predict_proba(X)[0]
         classes = list(
@@ -150,13 +196,13 @@ def run_inference(model, feature_cols, feature_stats, bls):
         )
         scores = dict(zip(classes, map(float, proba)))
         label = classes[int(np.argmax(proba))]
-        return label, scores
+        return label, scores, X
     except Exception:
         try:
             y = model.predict(X)[0]
-            return str(y), {}
+            return str(y), {}, X
         except Exception:
-            return None, {}
+            return None, {}, None
 
 
 def simple_bls(time: np.ndarray, flux: np.ndarray, max_period: float) -> dict:
@@ -164,7 +210,7 @@ def simple_bls(time: np.ndarray, flux: np.ndarray, max_period: float) -> dict:
     Minimal, fast placeholder if your real BLS is unavailable.
     Returns NaNs if not enough data.
     """
-    if time is None or flux is None or len(time) < 10:
+    if time is None or flux is None:
         return {
             "period": np.nan,
             "duration": np.nan,
@@ -172,12 +218,44 @@ def simple_bls(time: np.ndarray, flux: np.ndarray, max_period: float) -> dict:
             "sde": np.nan,
             "t0": np.nan,
         }
+    # Coerce to plain float arrays (handle astropy masked/time objects)
+    t = np.asarray(getattr(time, 'value', time), dtype=float)
+    f = np.asarray(getattr(flux, 'value', flux), dtype=float)
+    if np.ma.isMaskedArray(f):
+        f = np.asarray(f.filled(np.nan), dtype=float)
+    if np.ma.isMaskedArray(t):
+        t = np.asarray(t.filled(np.nan), dtype=float)
+    m = np.isfinite(t) & np.isfinite(f)
+    t, f = t[m], f[m]
+    if t.size < 10:
+        return {
+            "period": np.nan,
+            "duration": np.nan,
+            "depth": np.nan,
+            "sde": np.nan,
+            "t0": np.nan,
+        }
+    # Normalize time baseline and flux median
+    t = t - t.min()
+    med = np.nanmedian(f)
+    if np.isfinite(med) and med != 0:
+        f = f / med - 1.0
+    else:
+        f = f - np.nanmean(f)
     # Use a naive periodicity guess via autocorrelation as a fallback
-    t = time - time.min()
-    f = flux - np.nanmedian(flux)
-    n = min(len(f), 5000)
-    f = f[:n] - np.mean(f[:n])
-    ac = np.correlate(f, f, mode="full")[n - 1 :]
+    n = min(f.size, 5000)
+    f_work = f[:n] - np.nanmean(f[:n])
+    try:
+        ac = np.correlate(f_work, f_work, mode="full")[n - 1 :]
+    except TypeError:
+        # Fallback: if still masked or unsupported, bail gracefully
+        return {
+            "period": np.nan,
+            "duration": np.nan,
+            "depth": np.nan,
+            "sde": np.nan,
+            "t0": float(time.min()) if hasattr(time, '__len__') and len(time) else np.nan,
+        }
     ac[0] = 0.0
     idx = int(np.argmax(ac[1:]) + 1)
     if idx <= 0 or idx >= len(t):
@@ -195,7 +273,7 @@ def simple_bls(time: np.ndarray, flux: np.ndarray, max_period: float) -> dict:
     if not np.isfinite(period) or period <= 0 or period > max_period:
         period = np.nan
     # Rough depth estimate
-    depth = float(np.percentile(f, 2)) if np.isfinite(period) else np.nan
+    depth = float(np.nanpercentile(f, 2)) if np.isfinite(period) else np.nan
     return {
         "period": period,
         "duration": max(0.05, period * 0.05) if np.isfinite(period) else np.nan,
@@ -205,98 +283,288 @@ def simple_bls(time: np.ndarray, flux: np.ndarray, max_period: float) -> dict:
     }
 
 
+def summarize_lightcurve(time, flux):
+    import numpy as np
+    t = np.asarray(time)
+    f = np.asarray(flux)
+    m = np.isfinite(t) & np.isfinite(f)
+    t, f = t[m], f[m]
+    if t.size == 0:
+        return {}
+    med = np.median(f)
+    mean = np.mean(f)
+    std = np.std(f)
+    mad = np.median(np.abs(f - med)) * 1.4826  # robust sigma
+    dyn_range = (np.max(f) - np.min(f)) / med if med != 0 else np.nan
+    dt = np.diff(np.sort(t))
+    cadence = np.median(dt) if dt.size else np.nan
+    baseline = t.max() - t.min() if t.size else 0
+    # simple gap analysis
+    largest_gap = dt.max() if dt.size else 0
+    # outliers
+    outlier_mask = np.abs(f - med) > 5 * mad if np.isfinite(mad) and mad > 0 else np.zeros_like(f, bool)
+    outliers = int(outlier_mask.sum())
+    frac_out = outliers / f.size if f.size else 0
+    return {
+        "baseline_days": baseline,
+        "cadence_days": cadence,
+        "n_points": int(f.size),
+        "median_flux": float(med),
+        "mean_flux": float(mean),
+        "std_flux": float(std),
+        "robust_rms": float(mad),
+        "frac_rms": float(std / med) if med != 0 else np.nan,
+        "dynamic_range": float(dyn_range),
+        "largest_gap_days": float(largest_gap),
+        "outliers": outliers,
+        "outlier_fraction": frac_out,
+    }
+
+
+def quality_rating(stats):
+    score = 0
+    if stats["frac_rms"] < 0.02: score += 1
+    if stats["outlier_fraction"] < 0.01: score += 1
+    if stats["largest_gap_days"] < 0.5 * stats["baseline_days"]: score += 1
+    return ["LOW", "MODERATE", "HIGH"][min(score, 2)]
+
 def main():
-    st.set_page_config(page_title="NASA Project", layout="wide")
-    st.title("NASA Transit Search")
+    st.set_page_config(page_title="NASA Transit Search", layout="wide")
+    st.title("🚀 NASA Transit Search & Explainable AI")
+
+    # Inject light CSS for tighter layout
+    st.markdown(
+        """
+        <style>
+        .block-container {padding-top: 1.2rem;}
+        .stMetric label {font-weight:600;}
+        .small-note {font-size:0.75rem; opacity:0.7;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Sidebar controls
     with st.sidebar:
         st.subheader("Input")
-        _mission = st.selectbox("Mission", ["Auto", "Kepler", "TESS"], index=0)
-        target = st.text_input("Target (e.g., KIC/TIC ID)", "")
-        _max_rows = st.slider("Max rows (fetch)", 1_000, 100_000, 20_000, step=1_000)
+        mission = st.selectbox("Mission", ["Auto", "Kepler", "TESS"], index=0)
+        target = st.text_input("Target (e.g., Kepler-10)", "")
         max_period = st.slider("Max period [days]", 1.0, 50.0, 10.0, step=0.5)
         nbins = st.slider("Phase bins", 25, 300, 100, step=5)
-        uploaded = st.file_uploader("Or upload CSV (time,flux)", type=["csv"])
-        fetch_btn = st.button("Search")
+        uploaded = st.file_uploader("Upload CSV (time,flux)", type=["csv"])
+        run_btn = st.button("Run Analysis")
+        enable_shap = st.checkbox(
+            "Enable SHAP (slower)", value=False, help="Compute per-prediction explanation."
+        )
+        if not _HAS_SHAP and enable_shap:
+            st.warning("SHAP library not installed in this environment.")
+        st.caption("Model + transit feature pipeline demo. Upload or specify target.")
+        if st.button("Clear Lightkurve Cache"):
+            import shutil, os, pathlib
+            cache_dir = pathlib.Path.home()/".lightkurve"/"cache"/"mastDownload"
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            st.success("Cache cleared.")
 
-    # Load any existing artifacts
     model, feature_cols, feature_stats, importances = load_artifacts()
 
-    # Data ingestion
-    time_arr, flux_arr = None, None
+    # --- Data ingestion priority: uploaded > NASA fetch > synthetic demo ---
+    time_arr = flux_arr = None
+    source_label = "(none)"
+
+    # 1. Uploaded CSV
     if uploaded is not None:
         try:
             df_u = pd.read_csv(uploaded)
             if {"time", "flux"}.issubset(df_u.columns):
-                time_arr = df_u["time"].to_numpy(dtype=float)
-                flux_arr = df_u["flux"].to_numpy(dtype=float)
+                time_arr = df_u["time"].to_numpy(float)
+                flux_arr = df_u["flux"].to_numpy(float)
+                source_label = f"Upload: {uploaded.name}"
             else:
                 st.error("CSV must contain 'time' and 'flux' columns.")
         except Exception as e:
             st.error(f"Failed to read CSV: {e}")
 
-    # TODO: integrate real fetcher by target if available in your repo
-    # e.g., from utils.fetchers import fetch_lc; then if fetch_btn and target: time_arr, flux_arr = fetch_lc(target, mission, max_rows)
-    if time_arr is None and (fetch_btn or target):
-        st.info("No CSV provided. Target fetching is not wired; upload a CSV for now.")
+    # 2. NASA Lightkurve fetch (only if not already satisfied by upload)
+    if time_arr is None and run_btn and target.strip():
+        from lightkurve import search_lightcurve
+        target_clean = target.strip()
+        missions_to_try = [mission] if mission != "Auto" else ["Kepler", "K2", "TESS"]
+        fetched = False
+        for m in missions_to_try:
+            try:
+                sr = search_lightcurve(target_clean, mission=m)
+                if len(sr) == 0:
+                    continue
+                # Download a limited number of products to keep latency reasonable
+                pieces = []
+                for prod in sr[:3]:
+                    try:
+                        lc_part = prod.download()
+                        if lc_part is not None:
+                            pieces.append(lc_part)
+                    except Exception:
+                        continue
+                if not pieces:
+                    continue
+                try:
+                    lc_full = pieces[0]
+                    if len(pieces) > 1:
+                        lc_full = lc_full.append(pieces[1:])  # lightkurve collection append
+                    # Normalize if possible
+                    flux_vals = lc_full.flux.value if hasattr(lc_full.flux, 'value') else np.asarray(lc_full.flux)
+                    time_vals = lc_full.time.value if hasattr(lc_full.time, 'value') else np.asarray(lc_full.time)
+                    # Basic clean
+                    mask = np.isfinite(time_vals) & np.isfinite(flux_vals)
+                    time_arr = time_vals[mask]
+                    flux_arr = flux_vals[mask]
+                    source_label = f"NASA: {target_clean} ({m})"
+                    st.success(f"Fetched {len(time_arr)} points from {m} for {target_clean}.")
+                    fetched = True
+                    break
+                except Exception as e:
+                    st.warning(f"Failed assembling light curve for mission {m}: {e}")
+            except Exception:
+                continue
+        if not fetched and time_arr is None:
+            st.error("No matching NASA light curve found (Kepler/K2/TESS). Using synthetic demo.")
 
-    # If nothing provided, show demo data so the UI is populated
+    # 3. Synthetic fallback
     if time_arr is None:
-        time_arr = np.linspace(0, 10, 2000)
-        flux_arr = (
-            1.0
-            + 0.001 * np.sin(2 * np.pi * time_arr / 2.0)
-            + 5e-4 * np.random.randn(time_arr.size)
-        )
+        rng = np.random.default_rng(42)
+        time_arr = np.linspace(0, 12, 3000)
+        flux_arr = 1 + 0.001 * np.sin(2 * np.pi * time_arr / 2.1) + 5e-4 * rng.standard_normal(time_arr.size)
+        source_label = "Synthetic demo"
 
-    # Run “BLS” (fallback if real one not available)
     bls = simple_bls(time_arr, flux_arr, max_period=max_period)
-
-    # Metrics header
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(
-        "Best period [d]", f"{bls['period']:.5g}" if np.isfinite(bls["period"]) else "–"
-    )
-    c2.metric(
-        "Duration [d]",
-        f"{bls['duration']:.4g}" if np.isfinite(bls["duration"]) else "–",
-    )
     depth_ppm = bls["depth"] * 1e6 if np.isfinite(bls["depth"]) else np.nan
-    c3.metric(
-        "Depth [frac]",
-        f"{bls['depth']:.3g}" if np.isfinite(bls["depth"]) else "–",
-        help=f"{depth_ppm:.0f} ppm" if np.isfinite(depth_ppm) else None,
-    )
-    c4.metric("SDE", f"{bls['sde']:.2f}" if np.isfinite(bls["sde"]) else "–")
 
-    # Plots
-    st.subheader("Light curve")
-    fig = plot_lightcurve_with_transits(time_arr, flux_arr, bls)
-    st.pyplot(fig, clear_figure=True, width="stretch")
+    tabs = st.tabs([
+        "Overview",
+        "Detection",
+        "AI Classification",
+        "Explainability",
+        "Upload",
+    ])
 
-    if np.isfinite(bls["period"]):
-        st.subheader("Phase-folded")
-        fig_phase = plot_phase_folded(time_arr, flux_arr, bls, nbins=nbins)
-        st.pyplot(fig_phase, clear_figure=True, width="stretch")
+    # --- Overview Tab ---
+    with tabs[0]:
+        st.subheader("Overview")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Period [d]", f"{bls['period']:.4g}" if np.isfinite(bls["period"]) else "–")
+        c2.metric("Duration [d]", f"{bls['duration']:.4g}" if np.isfinite(bls["duration"]) else "–")
+        c3.metric(
+            "Depth (frac)",
+            f"{bls['depth']:.3g}" if np.isfinite(bls["depth"]) else "–",
+            help=f"≈{depth_ppm:.0f} ppm" if np.isfinite(depth_ppm) else None,
+        )
+        c4.metric("SDE", f"{bls['sde']:.3g}" if np.isfinite(bls["sde"]) else "–")
+        st.caption(f"Source: {source_label}")
+        st.write("Light Curve")
+        fig = plot_lightcurve_with_transits(time_arr, flux_arr, bls)
+        st.pyplot(fig, clear_figure=True)
 
-    # AI prediction
-    st.subheader("AI prediction")
-    label, probs = run_inference(model, feature_cols, feature_stats, bls)
-    if label is not None:
-        st.write("Prediction:", label)
-    if probs:
-        st.bar_chart(pd.Series(probs))
+    # --- Detection Tab ---
+    with tabs[1]:
+        st.subheader("Transit Detection & Phase Fold")
+        if np.isfinite(bls["period"]):
+            fig_phase = plot_phase_folded(time_arr, flux_arr, bls, nbins=nbins)
+            st.pyplot(fig_phase, clear_figure=True)
+        else:
+            st.info("No reliable period estimate; adjust max period or provide longer baseline.")
 
-    with st.expander("Feature importances", expanded=False):
-        plot_importances(importances)
+    # --- AI Classification Tab ---
+    with tabs[2]:
+        st.subheader("Model Prediction")
+        label, probs, X_pred = run_inference(model, feature_cols, feature_stats, bls)
+        if model is None:
+            st.warning("Model artifacts not found. Train first (scripts/train_baseline.py).")
+        elif label is None:
+            st.info("Insufficient features for prediction.")
+        else:
+            max_class = max(probs, key=probs.get) if probs else label
+            confidence = probs.get(max_class, 0.0) if probs else 0.0
+            st.markdown(f"**Prediction:** `{label}`  |  Confidence: {confidence:.2%}")
+            if probs:
+                st.bar_chart(pd.Series(probs))
+        if X_pred is not None:
+            st.caption("Feature vector prepared for model inference.")
+
+    # --- Explainability Tab ---
+    with tabs[3]:
+        st.subheader("Explainability")
+        if not feature_cols:
+            st.info("No feature columns available.")
+        else:
+            st.write("### Global Feature Importances")
+            plot_importances(importances, feature_cols)
+        if enable_shap:
+            st.write("### Per‑Prediction SHAP")
+            if not _HAS_SHAP:
+                st.error("SHAP unavailable in environment.")
+            else:
+                _, probs_tmp, X_pred_tmp = run_inference(
+                    model, feature_cols, feature_stats, bls
+                )
+                if X_pred_tmp is None:
+                    st.info("No prediction context for SHAP.")
+                else:
+                    with st.spinner("Computing SHAP…"):
+                        shap_fig, shap_values, cls_idx = get_shap_plot(model, X_pred_tmp)
+                    if shap_fig:
+                        st.pyplot(shap_fig, clear_figure=True)
+                        # Top contributors summary
+                        try:
+                            sv = shap_values[cls_idx][0]
+                            top_i = np.argsort(np.abs(sv))[-5:][::-1]
+                            st.write(
+                                "**Top contributing features:**",
+                                [
+                                    f"{feature_cols[i]} ({sv[i]:+.3g})"
+                                    for i in top_i
+                                ],
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        st.warning("Could not generate SHAP explanation.")
+        else:
+            st.info("Enable SHAP in the sidebar to compute per‑prediction explanations.")
+
+    # --- Upload Tab ---
+    with tabs[4]:
+        st.subheader("Upload Workflow")
+        st.write(
+            "Upload a CSV with columns 'time' and 'flux' via the sidebar. It will automatically populate the pipeline (Overview → Detection → AI → Explainability)."
+        )
+        st.markdown(
+            "<span class='small-note'>If you already uploaded a file, it is in use above.</span>",
+            unsafe_allow_html=True,
+        )
+    stats = summarize_lightcurve(time_arr, flux_arr)
+    with st.expander("Light Curve Stats", expanded=False):
+        cols = st.columns(3)
+        cols[0].metric("Baseline (d)", f"{stats['baseline_days']:.2f}")
+        cols[1].metric("Cadence (s)", f"{stats['cadence_days']*86400:.0f}")
+        cols[2].metric("Points", f"{stats['n_points']}")
+        cols[0].metric("RMS (frac)", f"{stats['frac_rms']:.3%}")
+        cols[1].metric("Robust RMS", f"{stats['robust_rms']:.2f}")
+        cols[2].metric("Outliers", f"{stats['outliers']} ({stats['outlier_fraction']:.2%})")
+    qr = quality_rating(stats)
+    st.caption(f"Data quality: **{qr}**")
 
 
 if __name__ == "__main__":
-    import lightkurve as lk
+    # Simplified entrypoint for Streamlit execution: avoid demo auto-downloads which
+    # were triggering ValueError: I/O operation on closed file under some reload cycles.
+    try:
+        main()
+    except Exception as e:  # final guard so Streamlit can render the traceback nicely
+        import logging
+        logging.exception("Fatal error in main(): %s", e)
 
-    search = lk.search_lightcurve("Kepler-10", mission="Kepler")
-    print(search)
-    lc = search.download_all(timeout=120).stitch()
-    print(lc)
-    main()
+test-batch:
+	@set -e; \\
+	for f in tests/test_*.py; do \\
+	  echo "Running $$f"; \\
+	  pytest -q $$f || exit 1; \\
+	done

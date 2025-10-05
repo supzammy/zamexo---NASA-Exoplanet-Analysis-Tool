@@ -13,10 +13,13 @@ import pandas as pd
 import requests
 from functools import lru_cache
 
-from utils.nasa import fetch_light_curve
 
 KOI_TABLE = "q1_q17_dr25_koi"
 KOI_URL = f"https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+*+from+{KOI_TABLE}+&format=csv"
+
+# Placeholder / representative endpoints (tests monkeypatch requests.get so content is controlled there)
+TOI_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+*+from+toi&format=csv"
+K2_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+*+from+k2&format=csv"
 
 
 def fetch_koi_table(cache_path: str | Path = "data/koi_cache.csv", force: bool = False) -> pd.DataFrame:
@@ -90,14 +93,30 @@ def fetch_ephemerides_cached(target: str) -> tuple[dict, ...]:
     return tuple(out)
 
 
+def _generic_table_fetch(url: str, cache_path: str | Path, force: bool, timeout: int = 60) -> pd.DataFrame:
+    cache = Path(cache_path)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    if cache.exists() and not force:
+        try:
+            return pd.read_csv(cache)
+        except Exception:
+            pass
+    r = requests.get(url, timeout=timeout)
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.text))
+    try:
+        df.to_csv(cache, index=False)
+    except Exception:
+        pass
+    return df
+
+
 def fetch_toi_table(cache_path: str | Path = "data/toi_cache.csv", force: bool = False) -> pd.DataFrame:
-    # TODO: Implement real fetch logic
-    return pd.DataFrame()
+    return _generic_table_fetch(TOI_URL, cache_path, force)
 
 
 def fetch_k2_table(cache_path: str | Path = "data/k2_cache.csv", force: bool = False) -> pd.DataFrame:
-    # TODO: Implement real fetch logic
-    return pd.DataFrame()
+    return _generic_table_fetch(K2_URL, cache_path, force)
 
 
 def fetch_light_curve(target: str, mission: str = "Kepler", timeout: int = 60):
@@ -120,7 +139,9 @@ def fetch_light_curve(target: str, mission: str = "Kepler", timeout: int = 60):
         return None, None
 
 
-time, flux = fetch_light_curve("Kepler-10", mission="Kepler")
-print(len(time), len(flux))
+if __name__ == "__main__":  # Manual quick smoke (avoid network on import during tests)
+    t, f = fetch_light_curve("Kepler-10", mission="Kepler")
+    if t is not None:
+        print("Fetched points:", len(t))
 
 

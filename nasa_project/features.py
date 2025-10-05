@@ -15,7 +15,11 @@ class BasicFeatures:
 
 
 def extract_basic(time, flux) -> BasicFeatures:
-    f = np.asarray(flux)
+    # Accept masked arrays; treat masked as invalid
+    f = flux
+    if np.ma.isMaskedArray(f):
+        f = f.filled(np.nan)
+    f = np.asarray(f, dtype=float)
     f = f[np.isfinite(f)]
     if f.size == 0:
         return BasicFeatures(0, np.nan, np.nan, np.nan, np.nan)

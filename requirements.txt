@@ -10,5 +10,6 @@ plotly>=5.22
 kaleido>=0.2.1
 scikit-learn>=1.4
 joblib>=1.4
+shap>=0.41
 # optional
 # transitleastsquares>=1.0.31
