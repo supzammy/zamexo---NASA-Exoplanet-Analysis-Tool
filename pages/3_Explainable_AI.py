@@ -95,15 +95,41 @@ def get_shap_plot(model, X):
         return None, None
         
     try:
+        # Ensure X is properly formatted
+        if not isinstance(X, pd.DataFrame):
+            return None, None
+            
         shap_values = explainer.shap_values(X)
         proba = model.predict_proba(X)[0]
         predicted_class = int(np.argmax(proba))
         
+        # Handle different SHAP value formats
+        if isinstance(shap_values, list):
+            # Multi-class case - use the predicted class
+            if predicted_class < len(shap_values):
+                shap_vals = shap_values[predicted_class]
+            else:
+                shap_vals = shap_values[0]
+        else:
+            # Binary case or single array
+            shap_vals = shap_values
+            
+        # Ensure we have the right shape for a single sample
+        if len(shap_vals.shape) > 1:
+            shap_vals = shap_vals[0]  # Take first sample
+        
         # Force plot
         fig, ax = plt.subplots(figsize=(12, 3))
+        
+        expected_value = explainer.expected_value
+        if isinstance(expected_value, (list, np.ndarray)) and len(expected_value) > predicted_class:
+            exp_val = expected_value[predicted_class]
+        else:
+            exp_val = expected_value
+            
         shap.force_plot(
-            explainer.expected_value[predicted_class],
-            shap_values[predicted_class][0],  # First sample
+            exp_val,
+            shap_vals,
             X.iloc[0],
             matplotlib=True,
             show=False,
@@ -111,7 +137,7 @@ def get_shap_plot(model, X):
         )
         fig.tight_layout()
         
-        return fig, shap_values[predicted_class][0]
+        return fig, shap_vals
     except Exception as e:
         st.error(f"SHAP computation failed: {e}")
         return None, None

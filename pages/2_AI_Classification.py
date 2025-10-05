@@ -9,7 +9,7 @@ import warnings
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X has feature names, but RandomForestClassifier was fitted without feature names")
 
-st.set_page_config(page_title="AI Classification", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="AI Classification", page_icon="🔬", layout="wide")
 
 # Import path setup
 import sys
@@ -331,7 +331,7 @@ if 'validation_warnings' in st.session_state and st.session_state['validation_wa
 if confidence > 0.5:  # Only show if we have reasonable confidence
     st.info("🔬 **Want to understand why?** Visit the Explainable AI page to see which features influenced this prediction.")
     if st.button("🔬 Explain This Prediction", type="secondary"):
-        st.switch_page("pages/3_🔬_Explainable_AI.py")
+        st.switch_page("pages/3_Explainable_AI.py")
 
 # Probability breakdown
 if probs:

@@ -348,17 +348,32 @@ if time_arr is not None:
         # Quick navigation to next step
         st.success("✅ **Transit analysis complete!** Ready for AI classification.")
         if st.button("🤖 Continue to AI Classification", type="primary"):
-            st.switch_page("pages/2_🤖_AI_Classification.py")
+            st.switch_page("pages/2_AI_Classification.py")
         
     else:
-        st.warning("⚠️ No significant transit signal detected. Try adjusting the maximum period or use a different target.")
+        st.warning("⚠️ **No strong transit signal detected**")
+        st.write("""
+        **This means:**
+        • The Box Least Squares algorithm didn't find a clear periodic transit pattern
+        • The signal might be too weak, too short, or masked by noise
+        • The true period might be longer than your maximum period setting
+        
+        **What to try:**
+        • Increase the maximum period (try 50-100 days)
+        • Try a different, well-known target (e.g., `TRAPPIST-1`, `Kepler-10b`)
+        • Check the light curve for obvious issues in the plot above
+        """)
         
         # Store minimal results even for weak signals
         st.session_state['bls_results'] = bls
         st.session_state['light_curve_data'] = (time_arr, flux_arr)
         st.session_state['source_label'] = source_label
         
-        st.info("💡 **Tip**: Even weak signals can be analyzed by the AI classifier to determine if they represent real transits or false positives.")
+        st.info("💡 **You can still proceed to AI Classification** - even weak or unclear signals can be analyzed to determine if they represent real transits or false positives.")
+        
+        # Always show button to continue
+        if st.button("🤖 Analyze with AI Anyway", type="secondary"):
+            st.switch_page("pages/2_AI_Classification.py")
         
     # Additional analysis options
     with st.expander("🔧 Advanced Options"):
