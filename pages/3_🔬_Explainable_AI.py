@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg') # Use non-interactive backend for Streamlit
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -147,17 +149,17 @@ def get_shap_plot(model, X):
             exp_val = float(expected_value)
         
         try:
-            # FINAL, MOST ROBUST APPROACH:
-            # This pattern is the most reliable for SHAP + Matplotlib + Streamlit.
-            # 1. Clear any existing plot state.
-            # 2. Call force_plot, which implicitly creates a new figure.
-            # 3. Immediately grab the current figure handle.
-            # 4. Pass this handle to st.pyplot() before any other plotting command can interfere.
-            plt.close('all')
+            # FINAL, MOST ROBUST APPROACH for Streamlit Cloud:
+            # The key is to let SHAP create the plot and then immediately
+            # pass the figure object to Streamlit without any other
+            # matplotlib commands that could affect the global state.
             
+            plt.close('all') # Ensure a clean slate before plotting.
+
             exp_val_scalar = float(exp_val)
             shap_vals_array = np.asarray(shap_vals, dtype=float)
             
+            # Generate the plot. `matplotlib=True` makes it create a new figure.
             shap.force_plot(
                 exp_val_scalar,
                 shap_vals_array,
@@ -166,6 +168,8 @@ def get_shap_plot(model, X):
                 show=False,
                 figsize=(12, 3)
             )
+            
+            # Grab the current figure that SHAP just created.
             fig = plt.gcf()
             fig.tight_layout()
 
@@ -314,11 +318,10 @@ else:
         shap_fig, shap_values = get_shap_plot(model, X_features)
     
     if shap_fig is not None:
-        # By setting clear_figure=False, we prevent Streamlit from closing the figure
-        # prematurely, which can cause the "I/O operation on closed file" error.
-        # We already call plt.close('all') at the start of the plot function
-        # to manage memory.
-        st.pyplot(shap_fig, clear_figure=False)
+        # Using clear_figure=True is often necessary on Streamlit Cloud
+        # to ensure proper resource management, even if it seems
+        # counter-intuitive. The key is the robust plot creation above.
+        st.pyplot(shap_fig, clear_figure=True)
         
         # Explain the SHAP plot
         st.write("**How to read this plot:**")
