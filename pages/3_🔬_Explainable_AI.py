@@ -147,8 +147,10 @@ def get_shap_plot(model, X):
             exp_val = float(expected_value)
         
         try:
-            # Try modern SHAP approach with single sample
-            fig = plt.figure(figsize=(12, 3))
+            # CORRECT APPROACH for Streamlit + Matplotlib
+            # 1. Call shap.force_plot which creates a figure implicitly.
+            # 2. Get the current figure using plt.gcf().
+            # 3. Pass this figure to st.pyplot().
             
             # Ensure all values are proper scalars/arrays
             exp_val_scalar = float(exp_val)
@@ -159,8 +161,10 @@ def get_shap_plot(model, X):
                 shap_vals_array,
                 X_values,  # Pass Series instead of DataFrame
                 matplotlib=True,
-                show=False
+                show=False,
+                figsize=(12, 3) # Pass figsize here
             )
+            fig = plt.gcf() # Get the current figure created by SHAP
             fig.tight_layout()
         except Exception as e:
             # Fallback approach - create custom bar plot
@@ -405,16 +409,20 @@ st.subheader("💡 Actionable Insights")
 
 insights = []
 
-if _HAS_SHAP and shap_values is not None:
-    # Find most influential feature
-    max_contrib_idx = np.argmax(np.abs(shap_values))
-    max_feature = feature_cols[max_contrib_idx]
-    max_contribution = shap_values[max_contrib_idx]
-    
-    if max_contribution > 0:
-        insights.append(f"🔍 **{max_feature}** was the strongest factor supporting the '{prediction_label}' classification.")
+if _HAS_SHAP and shap_values is not None and len(shap_values) > 0:
+    # Ensure shap_values and feature_cols have the same length before processing
+    if len(shap_values) == len(feature_cols):
+        # Find most influential feature
+        max_contrib_idx = np.argmax(np.abs(shap_values))
+        max_feature = feature_cols[max_contrib_idx]
+        max_contribution = shap_values[max_contrib_idx]
+        
+        if max_contribution > 0:
+            insights.append(f"🔍 **{max_feature}** was the strongest factor supporting the '{prediction_label}' classification.")
+        else:
+            insights.append(f"🔍 **{max_feature}** was the strongest factor working against the '{prediction_label}' classification.")
     else:
-        insights.append(f"🔍 **{max_feature}** was the strongest factor working against the '{prediction_label}' classification.")
+        insights.append("⚠️ Could not determine the most influential feature due to a data mismatch.")
 
 if max_prob < 0.6:
     insights.append("⚠️ **Low confidence** suggests this target may be borderline. Consider additional observations.")

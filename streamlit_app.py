@@ -2,14 +2,13 @@ import streamlit as st
 
 st.set_page_config(
     page_title="ZAMEXO - Home",
-    page_icon="�",
+    page_icon="🛰️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Main title
-st.title("� Home")
-st.markdown("### Welcome to the ZAMEXO Analysis Platform")
+# The main title is now handled by the HTML block below for better styling.
+# This ensures "Home" is in the browser tab/sidebar list, but the on-page title is "ZAMEXO".
 
 # Professional CSS styling
 st.markdown("""
