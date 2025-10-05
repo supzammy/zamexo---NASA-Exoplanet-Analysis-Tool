@@ -4,6 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+import warnings
+
+# Suppress sklearn feature name warnings
+warnings.filterwarnings("ignore", message="X has feature names, but RandomForestClassifier was fitted without feature names")
 
 st.set_page_config(page_title="AI Classification", page_icon="🤖", layout="wide")
 

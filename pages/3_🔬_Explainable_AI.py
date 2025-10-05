@@ -63,7 +63,13 @@ def _get_shap_explainer(_model):
 
 def get_shap_plot(model, X):
     """Generate SHAP force plot."""
-    if not _HAS_SHAP or model is None or X is None or X.empty:
+    if not _HAS_SHAP or model is None or X is None:
+        return None, None
+    
+    # Check if X is empty (handle both DataFrame and list/array cases)
+    if hasattr(X, 'empty') and X.empty:
+        return None, None
+    elif hasattr(X, '__len__') and len(X) == 0:
         return None, None
         
     explainer = _get_shap_explainer(model)
