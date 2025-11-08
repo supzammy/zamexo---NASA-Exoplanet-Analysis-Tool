@@ -1,3 +1,5 @@
+<img width="1439" height="751" alt="Screenshot 2025-11-07 at 5 06 34 AM" src="https://github.com/user-attachments/assets/6f67fd03-4cc2-433e-8508-58750c0b7d91" />
+
 
 **Exploring Exoplanets with Real NASA Data**
 
